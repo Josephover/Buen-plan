@@ -20,6 +20,7 @@ const schema = yup.object({
     .trim()
     .email('Ingresa un correo válido')
     .required('Ingresa tu correo'),
+  promoCode: yup.string().trim().optional(),
 });
 
 type FormValues = yup.InferType<typeof schema>;
@@ -36,6 +37,7 @@ export function CheckoutPage() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<FormValues>({ resolver: yupResolver(schema) });
 
@@ -55,7 +57,10 @@ export function CheckoutPage() {
 
     (async () => {
       try {
-        const confirmed = await confirmOrderMutate(buyer);
+        const confirmed = await confirmOrderMutate({
+          name: buyer.name,
+          email: buyer.email,
+        });
         if (!cancelled) navigate(`/orders/${confirmed.id}`);
       } catch (err) {
         if (!cancelled) {
@@ -83,8 +88,12 @@ export function CheckoutPage() {
     (sum, item) => sum + item.unitPriceCents * item.quantity,
     0,
   );
-  const feeCents = feeFromSubtotal(subtotalCents);
-  const totalCents = subtotalCents + feeCents;
+  const promoCode = (watch('promoCode') ?? '').trim();
+  const discountCents =
+    promoCode === 'SAVE10' ? Math.round(subtotalCents / 10) : 0;
+  const discountedSubtotalCents = subtotalCents - discountCents;
+  const discountedFeeCents = feeFromSubtotal(discountedSubtotalCents);
+  const totalCents = discountedSubtotalCents + discountedFeeCents;
   const isSubmitting = isCreating || isConfirming;
 
   //crear orden sin falla
@@ -95,6 +104,7 @@ export function CheckoutPage() {
     try {
       const order = await createOrderMutate({
         eventId: selection.eventId,
+        promoCode: values.promoCode?.trim() || undefined,
         items: selection.items.map((item) => ({
           ticketTypeId: item.ticketTypeId,
           quantity: item.quantity,
@@ -152,6 +162,19 @@ export function CheckoutPage() {
             )}
           </div>
 
+          <div>
+            <label htmlFor="promoCode" className="text-sm font-medium">
+              Código de descuento
+            </label>
+            <input
+              id="promoCode"
+              type="text"
+              className="mt-1 w-full rounded-lg border border-ink/15 px-3 py-2 text-sm"
+              placeholder="SAVE10"
+              {...register('promoCode')}
+            />
+          </div>
+
           {apiError && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
               {apiError}
@@ -185,9 +208,15 @@ export function CheckoutPage() {
             <dt>Subtotal</dt>
             <dd>{formatUsd(subtotalCents)}</dd>
           </div>
+          {discountCents > 0 && (
+            <div className="flex justify-between text-green-700">
+              <dt>Descuento</dt>
+              <dd>-{formatUsd(discountCents)}</dd>
+            </div>
+          )}
           <div className="flex justify-between">
             <dt>Cargo por servicio</dt>
-            <dd>{formatUsd(feeCents)}</dd>
+            <dd>{formatUsd(discountedFeeCents)}</dd>
           </div>
           <div className="flex justify-between font-semibold">
             <dt>Total</dt>

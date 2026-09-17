@@ -40,9 +40,23 @@ describe('OrdersService', () => {
         },
       ]);
       expect(order.subtotalCents).toBe(5000);
+      expect(order.discountCents).toBe(0);
       expect(order.feeCents).toBe(Math.round((5000 * SERVICE_FEE_PERCENT) / 100));
       expect(order.totalCents).toBe(order.subtotalCents + order.feeCents);
       expect(order.feeCents).toBe(500);
+    });
+
+    it('applies SAVE10 before calculating the service fee', () => {
+      const order = service.create({
+        eventId: 'noche-salsa',
+        promoCode: 'SAVE10',
+        items: [{ ticketTypeId: 'salsa-general', quantity: 2 }],
+      });
+
+      expect(order.subtotalCents).toBe(5000);
+      expect(order.discountCents).toBe(500);
+      expect(order.feeCents).toBe(450);
+      expect(order.totalCents).toBe(4950);
     });
 
     it('computes the 10% fee with integer math (not floating-point prices)', () => {

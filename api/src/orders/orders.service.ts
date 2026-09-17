@@ -11,6 +11,8 @@ import { APP_STORE } from '../store/store.constants';
 import { AppStore, Order } from '../store/store';
 
 export const SERVICE_FEE_PERCENT = 10;
+export const PROMO_CODE = 'SAVE10';
+export const PROMO_DISCOUNT_PERCENT = 10;
 
 @Injectable()
 export class OrdersService {
@@ -94,7 +96,14 @@ export class OrdersService {
       0,
     );
 
-    const feeCents = Math.round((subtotalCents * SERVICE_FEE_PERCENT) / 100);
+    const discountCents =
+      dto.promoCode === PROMO_CODE
+        ? Math.round((subtotalCents * PROMO_DISCOUNT_PERCENT) / 100)
+        : 0;
+    const discountedSubtotalCents = subtotalCents - discountCents;
+    const feeCents = Math.round(
+      (discountedSubtotalCents * SERVICE_FEE_PERCENT) / 100,
+    );
 
     const order: Order = {
       id: `ord_${randomUUID()}`,
@@ -102,8 +111,9 @@ export class OrdersService {
       status: 'pending',
       items,
       subtotalCents,
+      discountCents,
       feeCents,
-      totalCents: subtotalCents + feeCents,
+      totalCents: discountedSubtotalCents + feeCents,
       buyer: null,
       createdAt: new Date().toISOString(),
     };

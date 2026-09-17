@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsInt,
+  IsOptional,
   IsString,
   Min,
   ValidateNested,
@@ -20,6 +21,10 @@ export class OrderItemDto {
 export class CreateOrderDto {
   @IsString()
   eventId: string;
+
+  @IsOptional()
+  @IsString()
+  promoCode?: string;
 
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)

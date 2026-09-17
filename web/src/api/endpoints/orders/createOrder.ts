@@ -2,6 +2,7 @@ import { ApiEndpointFn } from '../../types';
 
 export type CreateOrderBody = {
   eventId: string;
+  promoCode?: string;
   items: { ticketTypeId: string; quantity: number }[];
 };
 

@@ -66,6 +66,12 @@ export function ConfirmationPage() {
           <dt>Subtotal</dt>
           <dd>{formatUsd(order.subtotalCents)}</dd>
         </div>
+        {order.discountCents > 0 && (
+          <div className="flex justify-between text-green-700">
+            <dt>Descuento</dt>
+            <dd>-{formatUsd(order.discountCents)}</dd>
+          </div>
+        )}
         <div className="flex justify-between">
           <dt>Cargo por servicio</dt>
           <dd>{formatUsd(order.feeCents)}</dd>
