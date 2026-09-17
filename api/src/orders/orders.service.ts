@@ -10,7 +10,6 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { APP_STORE } from '../store/store.constants';
 import { AppStore, Order } from '../store/store';
 
-/** Service fee applied on top of the ticket subtotal. */
 export const SERVICE_FEE_PERCENT = 10;
 
 @Injectable()
@@ -19,10 +18,6 @@ export class OrdersService {
 
   /**
    * Creates a pending order and holds inventory.
-   *
-   * The implementation below is intentionally incomplete: the UI can still
-   * create orders, but several product rules are missing. See README.md and
-   * orders.service.spec.ts.
    */
   create(dto: CreateOrderDto): Order {
     if (dto.items.length === 0) {
@@ -37,25 +32,60 @@ export class OrdersService {
       throw new NotFoundException('Evento no encontrado');
     }
 
-    const items = dto.items.map((line) => {
+    // Cantidades inválidas y ticketTypeId repetido en la misma request
+    const seen = new Set<string>();
+    for (const line of dto.items) {
+      if (seen.has(line.ticketTypeId)) {
+        throw new BadRequestException(
+          `La localidad "${line.ticketTypeId}" está repetida en la orden`,
+        );
+      }
+      seen.add(line.ticketTypeId);
+
+      if (!Number.isInteger(line.quantity) || line.quantity < 1) {
+        throw new BadRequestException(
+          `La cantidad para "${line.ticketTypeId}" debe ser al menos 1`,
+        );
+      }
+    }
+
+    // Resolver y validar cupo/tope ANTES de descontar inventario
+    const resolved = dto.items.map((line) => {
       const ticketType = event.ticketTypes.find(
         (type) => type.id === line.ticketTypeId,
       );
 
       if (!ticketType) {
-        throw new NotFoundException('Localidad no encontrada');
+        throw new NotFoundException(
+          `Localidad "${line.ticketTypeId}" no encontrada`,
+        );
       }
 
-      // TODO: reject quantity > remaining and quantity > maxPerOrder
-      // TODO: reject duplicate ticketTypeId values in the same request
-      // TODO: decrement ticketType.remaining
+      if (line.quantity > ticketType.maxPerOrder) {
+        throw new BadRequestException(
+          `No puedes pedir más de ${ticketType.maxPerOrder} entradas de "${ticketType.name}" por orden`,
+        );
+      }
+
+      if (line.quantity > ticketType.remaining) {
+        throw new BadRequestException(
+          `Solo quedan ${ticketType.remaining} entradas de "${ticketType.name}"`,
+        );
+      }
+
+      return { ticketType, quantity: line.quantity };
+    });
+
+    // Todo validado ahora se descuenta inventario y se arma la orden
+    const items = resolved.map(({ ticketType, quantity }) => {
+      ticketType.remaining -= quantity;
 
       return {
         ticketTypeId: ticketType.id,
         name: ticketType.name,
-        quantity: line.quantity,
+        quantity,
         unitPriceCents: ticketType.priceCents,
-        lineTotalCents: ticketType.priceCents * line.quantity,
+        lineTotalCents: ticketType.priceCents * quantity,
       };
     });
 
@@ -64,8 +94,7 @@ export class OrdersService {
       0,
     );
 
-    // TODO: feeCents should be SERVICE_FEE_PERCENT of subtotalCents, rounded
-    const feeCents = 0;
+    const feeCents = Math.round((subtotalCents * SERVICE_FEE_PERCENT) / 100);
 
     const order: Order = {
       id: `ord_${randomUUID()}`,
@@ -96,7 +125,11 @@ export class OrdersService {
   confirm(id: string, dto: ConfirmOrderDto): Order {
     const order = this.findById(id);
 
-    // TODO: reject when the order is not pending
+    if (order.status !== 'pending') {
+      throw new BadRequestException(
+        `La orden ya está "${order.status}" y no se puede confirmar de nuevo`,
+      );
+    }
 
     order.status = 'confirmed';
     order.buyer = { name: dto.name, email: dto.email };
